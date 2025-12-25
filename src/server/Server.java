@@ -1,4 +1,5 @@
 package server;
+import common.Checksum;
 import common.Packet;
 
 import java.io.ByteArrayInputStream;
@@ -35,11 +36,19 @@ public class Server {
                         new ObjectInputStream(bis);
 
                 Packet pkt = (Packet) ois.readObject();
+                boolean ok = Checksum.verify(pkt.data, pkt.checksum);
 
-                System.out.println(
-                        "[RDT] Got seq=" + pkt.seq +
-                                " data=" + pkt.data
-                );
+                if (!ok) {
+                    System.out.println("[RDT] CORRUPTED packet dropped");
+                    continue; // ACK نفرست
+                }else{
+                    System.out.println(
+                            "[RDT] OK seq=" + pkt.seq +
+                                    " data=" + pkt.data
+                    );
+
+                }
+
                 String response = "ACK";
                 DatagramPacket responsePacket =
                         new DatagramPacket(

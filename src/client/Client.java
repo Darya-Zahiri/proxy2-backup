@@ -1,5 +1,6 @@
 package client;
 
+import common.Checksum;
 import common.Packet;
 
 import java.io.ByteArrayOutputStream;
@@ -19,6 +20,8 @@ public class Client {
 
             // ساخت Packet
             Packet pkt = new Packet(0, false, "Hello, I am Client");
+            pkt.checksum = Checksum.calculate(pkt.data);
+
 
             // serialize Packet -> byte[]
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
