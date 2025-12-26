@@ -1,78 +1,71 @@
 package server;
+
 import common.Checksum;
 import common.Packet;
 
 import java.io.*;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.SocketException;
+import java.net.*;
 
 public class Server {
-    public static void main(String[] args) throws IOException {
-        DatagramSocket socket = null;
 
-        try {
-            int port = 12345;
-            socket = new DatagramSocket(port);
-            System.out.println("Server running on port " + port);
+    public static void main(String[] args) throws Exception {
+        DatagramSocket socket = new DatagramSocket(12345);
+        System.out.println("Server running on port 12345");
 
-            byte[] buffer = new byte[1024];
+        int expectedSeq = 0;
+        Packet lastAck = null;
 
-            while (true) {
-                DatagramPacket packet =
-                        new DatagramPacket(buffer, buffer.length);
-                socket.receive(packet);
+        byte[] buffer = new byte[1024];
 
-                // deserialize Packet
-                ByteArrayInputStream bis =
-                        new ByteArrayInputStream(
-                                packet.getData(),
-                                0,
-                                packet.getLength()
-                        );
-                ObjectInputStream ois =
-                        new ObjectInputStream(bis);
+        while (true) {
+            DatagramPacket dp = new DatagramPacket(buffer, buffer.length);
+            socket.receive(dp);
 
-                Packet pkt = (Packet) ois.readObject();
-                boolean ok = Checksum.verify(pkt.data, pkt.checksum);
+            Packet pkt = deserialize(dp);
 
-                if (!ok) {
-                    System.out.println("[RDT] CORRUPTED packet dropped");
-                    continue; // ACK نفرست
-                }else{
-                    System.out.println(
-                            "[RDT] OK seq=" + pkt.seq +
-                                    " data=" + pkt.data
-                    );
-
-                }
-
-                // ساخت ACK Packet
-                Packet ackPkt = new Packet(pkt.seq, true, "ACK");
-                ackPkt.checksum = Checksum.calculate(ackPkt.data);
-
-// serialize ACK Packet
-                ByteArrayOutputStream bos = new ByteArrayOutputStream();
-                ObjectOutputStream oos = new ObjectOutputStream(bos);
-                oos.writeObject(ackPkt);
-                byte[] ackData = bos.toByteArray();
-
-                DatagramPacket responsePacket =
-                        new DatagramPacket(
-                                ackData,
-                                ackData.length,
-                                packet.getAddress(),
-                                packet.getPort()
-                        );
-
-                socket.send(responsePacket);
-
+            if (!Checksum.verify(pkt.data, pkt.checksum)) {
+                System.out.println("[RDT] CORRUPTED packet dropped");
+                continue;
             }
 
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            if (socket != null) socket.close();
+            if (pkt.seq == expectedSeq) {
+                System.out.println("[RDT] Delivered seq=" + pkt.seq +
+                        " data=" + pkt.data);
+
+                Packet ack = new Packet(pkt.seq, true, "ACK");
+                ack.checksum = Checksum.calculate(ack.data);
+                lastAck = ack;
+
+                sendAck(socket, dp, ack);
+                expectedSeq = 1 - expectedSeq;
+
+            } else {
+                System.out.println("[RDT] Duplicate packet seq=" + pkt.seq);
+                if (lastAck != null) {
+                    sendAck(socket, dp, lastAck);
+                }
+            }
         }
+    }
+
+    static void sendAck(DatagramSocket socket, DatagramPacket dp, Packet ack)
+            throws IOException {
+
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(bos);
+        oos.writeObject(ack);
+        byte[] data = bos.toByteArray();
+
+        DatagramPacket ackDp =
+                new DatagramPacket(data, data.length,
+                        dp.getAddress(), dp.getPort());
+        socket.send(ackDp);
+    }
+
+    static Packet deserialize(DatagramPacket dp) throws Exception {
+        ByteArrayInputStream bis =
+                new ByteArrayInputStream(dp.getData(), 0, dp.getLength());
+        ObjectInputStream ois = new ObjectInputStream(bis);
+        return (Packet) ois.readObject();
     }
 }
