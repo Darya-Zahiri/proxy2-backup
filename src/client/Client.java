@@ -3,7 +3,9 @@ package client;
 import common.Checksum;
 import common.Packet;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -21,6 +23,8 @@ public class Client {
             // ساخت Packet
             Packet pkt = new Packet(0, false, "Hello, I am Client");
             pkt.checksum = Checksum.calculate(pkt.data);
+            pkt.data = "CORRUPTED DATA";
+
 
 
             // serialize Packet -> byte[]
@@ -45,12 +49,26 @@ public class Client {
                     new DatagramPacket(buffer, buffer.length);
             socket.receive(responsePacket);
 
-            String response = new String(
-                    responsePacket.getData(),
-                    0,
-                    responsePacket.getLength()
-            );
-            System.out.println("Received from server: " + response);
+
+// deserialize ACK Packet
+            ByteArrayInputStream bis =
+                    new ByteArrayInputStream(
+                            responsePacket.getData(),
+                            0,
+                            responsePacket.getLength()
+                    );
+            ObjectInputStream ois =
+                    new ObjectInputStream(bis);
+
+            Packet ackPkt = (Packet) ois.readObject();
+
+// بررسی ACK
+            if (ackPkt.ack && Checksum.verify(ackPkt.data, ackPkt.checksum)) {
+                System.out.println(
+                        "[CLIENT] ACK received for seq=" + ackPkt.seq
+                );
+            }
+
 
         } catch (Exception e) {
             e.printStackTrace();

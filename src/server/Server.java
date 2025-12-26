@@ -2,9 +2,7 @@ package server;
 import common.Checksum;
 import common.Packet;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.ObjectInputStream;
+import java.io.*;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.SocketException;
@@ -49,16 +47,26 @@ public class Server {
 
                 }
 
-                String response = "ACK";
+                // ساخت ACK Packet
+                Packet ackPkt = new Packet(pkt.seq, true, "ACK");
+                ackPkt.checksum = Checksum.calculate(ackPkt.data);
+
+// serialize ACK Packet
+                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                ObjectOutputStream oos = new ObjectOutputStream(bos);
+                oos.writeObject(ackPkt);
+                byte[] ackData = bos.toByteArray();
+
                 DatagramPacket responsePacket =
                         new DatagramPacket(
-                                response.getBytes(),
-                                response.length(),
+                                ackData,
+                                ackData.length,
                                 packet.getAddress(),
                                 packet.getPort()
                         );
 
                 socket.send(responsePacket);
+
             }
 
         } catch (Exception e) {
